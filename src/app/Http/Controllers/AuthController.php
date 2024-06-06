@@ -65,23 +65,19 @@ class AuthController extends Controller
         $user = User::where('email', $request->email)->first();
 
         if (!$user) {
-            \Log::info('User not found for email: ' . $request->email);
             return back()->withErrors([
             'email' => 'The provided credentials do not match our records.',
         ])->onlyInput('email');
         }
 
         if (!Hash::check($request->password, $user->password)) {
-            \Log::info('Password does not match for user: ' . $request->email);
-           
-            return back()->withErrors([
+                return back()->withErrors([
                 'email' => 'The provided credentials do not match our records.',
             ])->onlyInput('email');
         }
 
         if (!$user->email_verified_at) {
-        \Log::info('Email not verified for user: ' . $request->email);
-        return back()->withErrors([
+            return back()->withErrors([
             'email' => 'Your email address is not verified.',
         ])->onlyInput('email');
     }
