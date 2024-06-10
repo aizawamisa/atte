@@ -10,9 +10,9 @@ use App\Models\Rest;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Carbon;
 
+
 class AttendanceController extends Controller
 {
-    // ホーム画面表示
     public function punch()
     {
         $user = Auth::user();
@@ -21,7 +21,7 @@ class AttendanceController extends Controller
             return redirect()->route('login');
         }
 
-        $now_date = Carbon::now()->format('Y-m-d H:i:s');
+        $now_date = Carbon::now()->format('Y-m-d');
         $user_id = $user->id;
 
         $confirm_date = Work::where('user_id', $user_id)
@@ -36,7 +36,6 @@ class AttendanceController extends Controller
         return view('index', compact('status'));
     }
 
-    // 勤務開始
     public function startWork()
     {
         $user = Auth::user();
@@ -56,7 +55,6 @@ class AttendanceController extends Controller
         return redirect()->route('index');
     }
 
-    // 勤務終了
     public function endWork()
     {
         $user = Auth::user();
@@ -77,7 +75,6 @@ class AttendanceController extends Controller
         return redirect()->route('index');
     }
 
-    // 休憩開始
     public function startRest()
     {
         $user = Auth::user();
@@ -101,7 +98,6 @@ class AttendanceController extends Controller
         return redirect()->route('index');
     }
 
-    // 休憩終了
     public function endRest()
     {
         $user = Auth::user();
@@ -124,17 +120,60 @@ class AttendanceController extends Controller
         return redirect()->route('index');
     }
 
-    // 日別一覧表示
+    //  日別一覧表示
     public function indexDate(Request $request)
     {
-        $displayDate = Carbon::now();
+        $date = $request->input('date', Carbon::now()->format('Y-m-d'));
+        $displayDate = Carbon::parse($date)->format('Y-m-d');
 
-        $users = DB::table('attendance_view_table')
-            ->whereDate('date', $displayDate)
-            ->paginate(5);
 
-        return view('attendance_date', compact('users', 'displayDate'));
+        $attendances = DB::table('works')
+        ->join('users', 'works.user_id', '=', 'users.id')
+        ->leftJoin('rests', 'works.id', '=', 'rests.work_id')
+        ->whereDate('works.start_work', $displayDate)
+        ->select(
+            'users.name',
+            'works.start_work',
+            'works.end_work',
+            DB::raw('TIMESTAMPDIFF(MINUTE, works.start_work, works.end_work) AS work_minutes'),
+            DB::raw('COALESCE(SUM(TIMESTAMPDIFF(MINUTE, rests.start_rest, rests.end_rest)), 0) AS total_rest'),
+            DB::raw('TIMESTAMPDIFF(MINUTE, works.start_work, works.end_work) - COALESCE(SUM(TIMESTAMPDIFF(MINUTE, rests.start_rest, rests.end_rest)), 0) AS total_work')
+        )
+         ->groupBy('works.id', 'users.name', 'works.start_work', 'works.end_work')
+        ->paginate(5);
+
+        return view('attendance_date', compact('attendances', 'displayDate'));
     }
 
- 
+    // 日別一覧 / 抽出処理
+    public function perDate(Request $request)
+    {
+        $displayDate = Carbon::parse($request->input('displayDate'));
+
+        if ($request->has('prevDate')) {
+            $displayDate->subDay();
+        }
+
+        if ($request->has('nextDate')) {
+            $displayDate->addDay();
+        }
+
+        $attendances = DB::table('works')
+            ->join('users', 'works.user_id', '=', 'users.id')
+            ->leftJoin('rests', 'works.id', '=', 'rests.work_id')
+            ->whereDate('works.start_work', $displayDate)
+            ->select(
+            'users.name',
+            'works.start_work',
+            'works.end_work',
+            DB::raw('TIMESTAMPDIFF(MINUTE, works.start_work, works.end_work) AS work_minutes'),
+            DB::raw('COALESCE(SUM(TIMESTAMPDIFF(MINUTE, rests.start_rest, rests.end_rest)), 0) AS total_rest'),
+            DB::raw('TIMESTAMPDIFF(MINUTE, works.start_work, works.end_work) - COALESCE(SUM(TIMESTAMPDIFF(MINUTE, rests.start_rest, rests.end_rest)), 0) AS total_work')
+            )
+            ->groupBy('works.id', 'users.name', 'works.start_work', 'works.end_work')
+            ->paginate(5);
+
+        return view('attendance_date', compact('attendances', 'displayDate'));
+    }
+
 }

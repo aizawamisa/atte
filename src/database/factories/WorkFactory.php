@@ -25,6 +25,13 @@ class WorkFactory extends Factory
         ];
     }
 
+    public function configure()
+    {
+        return $this->afterCreating(function (Work $work){
+            $work->user()->associate(User::inRandomOrder()->first())->save();
+        });
+    }
+
     public function forUser($userId)
     {
         return $this->state([

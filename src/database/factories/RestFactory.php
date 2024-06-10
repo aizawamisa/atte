@@ -25,6 +25,13 @@ class RestFactory extends Factory
         ];
     }
 
+    public function configure()
+    {
+        return $this->afterCreating(function (Rest $rest) {
+            $rest->work()->associate(Work::inRandomOrder()->first())->save();
+        });
+    }
+
     public function forWork($workId)
     {
         return $this->state([
