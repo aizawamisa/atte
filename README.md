@@ -8,7 +8,8 @@ Atte（アット）
 ##作成目的  
 人事評価のため、社員の日々の労働時間や休憩時間を記録保存・管理するため（労務管理ツール）  
 
-##アプリケーションURL  
+##アプリケーションURL 
+https://github.com/aizawamisa/atte.git
 
 ##機能一覧  
 ログイン機能、メール認証、勤務状態によるボタン制御、勤務時間/休憩時間管理、日付別勤怠管理  
@@ -23,3 +24,10 @@ Laravel 8.x
 
 ##ER図  
 ![ER図](https://github.com/aizawamisa/atte/assets/156577020/7957d880-c47e-4943-888a-ede1d1274693)  
+
+##ログイン画面への入力  
+テストユーザー（ダミーデータ）として、以下をログイン画面（/login)に入力してください。    
+メールアドレス：miyazawa.manabu@example.org  
+パスワード：$2y$10$LfCIcUftn4HyovrjC/YRgudGXIFpqob50APhgxOggcFDItnI/HThG  
+![login画面](https://github.com/aizawamisa/atte/assets/156577020/408d4ac8-16d8-455d-9b48-314f06456a37)
+
