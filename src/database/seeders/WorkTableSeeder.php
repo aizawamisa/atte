@@ -15,6 +15,6 @@ class WorkTableSeeder extends Seeder
      */
     public function run()
     {
-        Work::factory()->count(30)->create();
+        Work::factory()->count(300)->create();
     }
 }

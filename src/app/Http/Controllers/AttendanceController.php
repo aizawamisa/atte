@@ -10,7 +10,6 @@ use App\Models\Rest;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Carbon;
 
-
 class AttendanceController extends Controller
 {
     public function punch()
@@ -33,6 +32,7 @@ class AttendanceController extends Controller
         } else {
             $status = $user->status;
         }
+
         return view('index', compact('status'));
     }
 
@@ -66,7 +66,27 @@ class AttendanceController extends Controller
         $work = Work::where('user_id', $user->id)->latest()->first();
 
         if ($work) {
-            $work->update(['end_work' => Carbon::now()->format('Y-m-d H:i:s')]);
+            $endWorkTime = Carbon::now();
+            $startWorkTime = Carbon::parse($work->start_work);
+
+            if ($endWorkTime->format('Y-m-d') !== $startWorkTime->format('Y-m-d')) {
+                $endOfStartDay = $startWorkTime->copy()->endOfDay();
+                $startOfEndDay = $endWorkTime->copy()->startOfDay();
+
+                $work->update(['end_work' => $endOfStartDay->format('Y-m-d H:i:s')]);
+
+                $newWork = Work::create([
+                    'user_id' => $user->id,
+                    'start_work' => $startOfEndDay->format('Y-m-d H:i:s'),
+                    'end_work' => $endWorkTime->format('Y-m-d H:i:s')
+                ]);
+
+                $this->createRestsForWork($work);
+                $this->createRestsForWork($newWork);
+            } else {
+                $work->update(['end_work' => $endWorkTime->format('Y-m-d H:i:s')]);
+                $this->createRestsForWork($work);
+            }
 
             $user->status = 0; // 勤務前にリセット
             $user->save();
@@ -120,32 +140,16 @@ class AttendanceController extends Controller
         return redirect()->route('index');
     }
 
-    //  日別一覧表示
     public function indexDate(Request $request)
     {
         $date = $request->input('date', Carbon::now()->format('Y-m-d'));
-        $displayDate = Carbon::parse($date)->format('Y-m-d');
+        $displayDate = Carbon::parse($date);
 
-
-        $attendances = DB::table('works')
-        ->join('users', 'works.user_id', '=', 'users.id')
-        ->leftJoin('rests', 'works.id', '=', 'rests.work_id')
-        ->whereDate('works.start_work', $displayDate)
-        ->select(
-            'users.name',
-            'works.start_work',
-            'works.end_work',
-            DB::raw('TIMESTAMPDIFF(MINUTE, works.start_work, works.end_work) AS work_minutes'),
-            DB::raw('COALESCE(SUM(TIMESTAMPDIFF(MINUTE, rests.start_rest, rests.end_rest)), 0) AS total_rest'),
-            DB::raw('TIMESTAMPDIFF(MINUTE, works.start_work, works.end_work) - COALESCE(SUM(TIMESTAMPDIFF(MINUTE, rests.start_rest, rests.end_rest)), 0) AS total_work')
-        )
-         ->groupBy('works.id', 'users.name', 'works.start_work', 'works.end_work')
-        ->paginate(5);
+        $attendances = $this->fetchAttendancesByDate($displayDate);
 
         return view('attendance_date', compact('attendances', 'displayDate'));
     }
 
-    // 日別一覧 / 抽出処理
     public function perDate(Request $request)
     {
         $displayDate = Carbon::parse($request->input('displayDate'));
@@ -158,22 +162,113 @@ class AttendanceController extends Controller
             $displayDate->addDay();
         }
 
-        $attendances = DB::table('works')
-            ->join('users', 'works.user_id', '=', 'users.id')
-            ->leftJoin('rests', 'works.id', '=', 'rests.work_id')
-            ->whereDate('works.start_work', $displayDate)
-            ->select(
-            'users.name',
-            'works.start_work',
-            'works.end_work',
-            DB::raw('TIMESTAMPDIFF(MINUTE, works.start_work, works.end_work) AS work_minutes'),
-            DB::raw('COALESCE(SUM(TIMESTAMPDIFF(MINUTE, rests.start_rest, rests.end_rest)), 0) AS total_rest'),
-            DB::raw('TIMESTAMPDIFF(MINUTE, works.start_work, works.end_work) - COALESCE(SUM(TIMESTAMPDIFF(MINUTE, rests.start_rest, rests.end_rest)), 0) AS total_work')
-            )
-            ->groupBy('works.id', 'users.name', 'works.start_work', 'works.end_work')
-            ->paginate(5);
+        $attendances = $this->fetchAttendancesByDate($displayDate);
 
         return view('attendance_date', compact('attendances', 'displayDate'));
     }
 
+    protected function fetchAttendancesByDate(Carbon $displayDate)
+    {
+        $attendancesQuery = DB::table('works')
+            ->join('users', 'works.user_id', '=', 'users.id')
+            ->leftJoin('rests', 'works.id', '=', 'rests.work_id')
+            ->where(function ($query) use ($displayDate) {
+                $query->whereDate('works.start_work', $displayDate->format('Y-m-d'))
+                    ->orWhereDate('works.end_work', $displayDate->format('Y-m-d'))
+                    ->orWhere(function ($query) use ($displayDate) {
+                        $query->whereDate('works.start_work', '<=', $displayDate->format('Y-m-d'))
+                            ->whereDate('works.end_work', '>=', $displayDate->format('Y-m-d'));
+                    });
+            })
+            ->select(
+                'users.name',
+                'works.id',
+                'works.start_work',
+                'works.end_work'
+            );
+
+        $attendances = $attendancesQuery->paginate(5);
+
+        $attendances->getCollection()->transform(function ($attendance) use ($displayDate) {
+            $this->formatAttendance($attendance, $displayDate);
+            return $attendance;
+        });
+
+        return $attendances;
+    }
+
+    protected function formatAttendance($attendance, $displayDate)
+    {
+        $startWork = Carbon::parse($attendance->start_work);
+        $endWork = Carbon::parse($attendance->end_work);
+
+        if ($startWork->format('Y-m-d') != $endWork->format('Y-m-d')) {
+            if ($displayDate->format('Y-m-d') == $startWork->format('Y-m-d')) {
+                $attendance->start_work = $startWork;
+                $attendance->end_work = $startWork->copy()->endOfDay();
+                $attendance->total_work = $startWork->diffInMinutes($startWork->copy()->endOfDay());
+            } elseif ($displayDate->format('Y-m-d') == $endWork->format('Y-m-d')) {
+                $attendance->start_work = $endWork->copy()->startOfDay();
+                $attendance->end_work = $endWork;
+                $attendance->total_work = $endWork->diffInMinutes($endWork->copy()->startOfDay());
+            } else {
+                $attendance->start_work = $startWork->copy()->startOfDay();
+                $attendance->end_work = $startWork->copy()->endOfDay();
+                $attendance->total_work = $startWork->copy()->diffInMinutes($startWork->copy()->endOfDay());
+            }
+        } else {
+            $attendance->start_work = $startWork;
+            $attendance->end_work = $endWork;
+            $attendance->total_work = $startWork->diffInMinutes($endWork);
+        }
+
+        $attendance->total_rest = DB::table('rests')
+            ->where('work_id', $attendance->id)
+            ->when($startWork->format('Y-m-d') != $endWork->format('Y-m-d'), function ($query) use ($startWork, $endWork, $attendance) {
+                $query->whereDate('start_rest', '>=', $startWork->format('Y-m-d'))
+                    ->whereDate('end_rest', '<=', $endWork->format('Y-m-d'));
+            })
+            ->sum(DB::raw('TIMESTAMPDIFF(MINUTE, start_rest, end_rest)')); 
+
+        $attendance->total_work -= $attendance->total_rest;
+    }
+
+        protected function createRestsForWork($work)
+    {
+        $startWork = Carbon::parse($work->start_work);
+        $endWork = Carbon::parse($work->end_work);
+
+        $current = $startWork->copy();
+        $rests = [];
+
+        $existingRests = Rest::where('work_id', $work->id)->get();
+
+        foreach ($existingRests as $existingRest) {
+            $startRest = Carbon::parse($existingRest->start_rest);
+            $endRest = Carbon::parse($existingRest->end_rest);
+
+                if ($startRest >= $startWork && $endRest <= $endWork) {
+                if ($startRest > $current) {
+                    $rests[] = [
+                        'start_rest' => $current->toDateTimeString(),
+                        'end_rest' => $startRest->toDateTimeString(),
+                        'work_id' => $work->id,
+                    ];
+                }
+                $current = $endRest;
+            }
+        }
+
+        if ($current < $endWork) {
+            $rests[] = [
+                'start_rest' => $current->toDateTimeString(),
+                'end_rest' => $endWork->toDateTimeString(),
+                'work_id' => $work->id,
+            ];
+        }
+
+        foreach ($rests as $rest) {
+            Rest::create($rest);
+        }
+    }
 }

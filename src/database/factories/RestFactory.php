@@ -17,25 +17,45 @@ class RestFactory extends Factory
     public function definition()
     {
         $dummyDate = $this->faker->dateTimeThisMonth;
-        
+
         return [
-            'work_id' =>  Work::factory(),
             'start_rest' => $dummyDate->format('Y-m-d H:i:s'),
             'end_rest' => $dummyDate->modify('+1 hours')->format('Y-m-d H:i:s'),
+             'work_id' =>  Work::factory(),
         ];
     }
-
-    public function configure()
-    {
-        return $this->afterCreating(function (Rest $rest) {
-            $rest->work()->associate(Work::inRandomOrder()->first())->save();
-        });
-    }
-
-    public function forWork($workId)
-    {
-        return $this->state([
-            'work_id' => $workId,
-        ]);
-    }
 }
+
+// class RestFactory extends Factory
+// {
+//     protected $model = Rest::class;
+//     /**
+//      * Define the model's default state.
+//      *
+//      * @return array
+//      */
+//     public function definition()
+//     {
+//         $dummyDate = $this->faker->dateTimeThisMonth;
+        
+//         return [
+//             'work_id' =>  Work::factory(),
+//             'start_rest' => $dummyDate->format('Y-m-d H:i:s'),
+//             'end_rest' => $dummyDate->modify('+1 hours')->format('Y-m-d H:i:s'),
+//         ];
+//     }
+
+//     public function configure()
+//     {
+//         return $this->afterCreating(function (Rest $rest) {
+//             $rest->work()->associate(Work::inRandomOrder()->first())->save();
+//         });
+//     }
+
+//     public function forWork($workId)
+//     {
+//         return $this->state([
+//             'work_id' => $workId,
+//         ]);
+//     }
+// }

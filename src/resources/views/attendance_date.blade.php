@@ -25,13 +25,14 @@
             @foreach ($attendances as $attendance)
                 <tr class="table__row">
                     <td class="table__item">{{ $attendance->name }}</td>
-                    <td class="table__item">{{ $attendance->start_work }}</td>
-                    <td class="table__item">{{ $attendance->end_work }}</td>
+                    <td class="table__item">{{ $attendance->start_work->format('Y-m-d H:i:s') }}</td>
+                    <td class="table__item">{{ $attendance->end_work->format('Y-m-d H:i:s') }}</td>
                     <td class="table__item">{{ $attendance->total_rest }}分</td>
                     <td class="table__item">{{ $attendance->total_work }}分</td>
                 </tr>
             @endforeach
         </table>
     </div>
-    {{ $attendances->links() }}
+
+    {{ $attendances->links() }} 
 @endsection

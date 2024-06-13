@@ -4,6 +4,7 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Support\Carbon;
 
 class Rest extends Model
 {
@@ -15,8 +16,13 @@ class Rest extends Model
         'end_rest'
     ];
 
-    public function work()
-    {
-        return $this->belongsTo(Work::class);
-    }
+    protected $dates = [
+        'start_rest',
+        'end_rest',
+    ];
+
+    // public function work()
+    // {
+    //     return $this->belongsTo(Work::class);
+    // }
 }
